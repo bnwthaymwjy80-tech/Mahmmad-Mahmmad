@@ -1,0 +1,179 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 4.1: Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'city', 'createdAt', 'updatedAt'])
+        && data.uid is string
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 100
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 200
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500))
+        && (!('city' in data) || (data.city is string && data.city.size() <= 80))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOrder(data, userId, orderId) {
+      return data.keys().hasAll([
+          'id', 'userId', 'status', 'paymentMethod',
+          'subtotalIqd', 'discountIqd', 'shippingIqd', 'totalIqd',
+          'customerName', 'customerPhone', 'customerCity', 'customerAddress',
+          'estimatedDelivery', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'userId', 'status', 'paymentMethod',
+          'subtotalIqd', 'discountIqd', 'shippingIqd', 'totalIqd',
+          'customerName', 'customerPhone', 'customerCity', 'customerAddress',
+          'estimatedDelivery', 'itemsSummary', 'createdAt'
+        ])
+        && data.id is string
+        && data.id == orderId
+        && isValidId(data.id)
+        && data.userId is string
+        && data.userId == userId
+        && data.userId == request.auth.uid
+        && data.status in ['preparing', 'shipped', 'delivered']
+        && data.paymentMethod in ['cod', 'card']
+        && data.subtotalIqd is number && data.subtotalIqd >= 0
+        && data.discountIqd is number && data.discountIqd >= 0
+        && data.shippingIqd is number && data.shippingIqd >= 0
+        && data.totalIqd is number && data.totalIqd >= 0
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100
+        && data.customerPhone is string && data.customerPhone.size() >= 5 && data.customerPhone.size() <= 30
+        && data.customerCity is string && data.customerCity.size() >= 1 && data.customerCity.size() <= 80
+        && data.customerAddress is string && data.customerAddress.size() >= 1 && data.customerAddress.size() <= 240
+        && data.estimatedDelivery is string && data.estimatedDelivery.size() >= 1 && data.estimatedDelivery.size() <= 120
+        && (!('itemsSummary' in data) || (data.itemsSummary is string && data.itemsSummary.size() <= 500))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidReview(data, reviewId) {
+      return data.keys().hasAll([
+          'id', 'productId', 'userId', 'author', 'rating', 'comment', 'isPublic', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'productId', 'userId', 'author', 'rating', 'comment', 'verifiedSize', 'isPublic', 'createdAt'
+        ])
+        && data.id is string
+        && data.id == reviewId
+        && isValidId(data.id)
+        && data.productId is string
+        && isValidId(data.productId)
+        && data.productId.size() <= 64
+        && data.userId is string
+        && data.userId == request.auth.uid
+        && data.userId.size() <= 128
+        && data.author is string
+        && data.author.size() >= 1
+        && data.author.size() <= 100
+        && data.rating is number
+        && data.rating >= 1
+        && data.rating <= 5
+        && data.comment is string
+        && data.comment.size() >= 1
+        && data.comment.size() <= 500
+        && (!('verifiedSize' in data) || (data.verifiedSize is string && data.verifiedSize.size() <= 40))
+        && data.isPublic == true
+        && data.createdAt is timestamp;
+    }
+
+    // Connection health check path (read-only ping)
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Public non-PII Product Reviews (only authenticated verified users may author)
+    match /reviews/{reviewId} {
+      allow get: if isValidId(reviewId);
+      allow list: if resource.data.isPublic == true;
+      allow create: if isValidId(reviewId)
+        && isSignedIn()
+        && isValidReview(incoming(), reviewId)
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(reviewId) && isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    // Private User Profile documents (PII isolated strictly to owner)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'city', 'updatedAt']);
+      allow delete: if false;
+
+      // Customer Order Subcollection
+      match /orders/{orderId} {
+        allow get: if isValidId(userId) && isValidId(orderId) && isOwner(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(orderId)
+          && isOwner(userId)
+          && isValidOrder(incoming(), userId, orderId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow update: if isValidId(userId)
+          && isValidId(orderId)
+          && isOwner(userId)
+          && isValidOrder(incoming(), userId, orderId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().paymentMethod == existing().paymentMethod
+          && incoming().subtotalIqd == existing().subtotalIqd
+          && incoming().discountIqd == existing().discountIqd
+          && incoming().shippingIqd == existing().shippingIqd
+          && incoming().totalIqd == existing().totalIqd
+          && incoming().customerName == existing().customerName
+          && incoming().customerPhone == existing().customerPhone
+          && incoming().customerCity == existing().customerCity
+          && incoming().customerAddress == existing().customerAddress
+          && incoming().estimatedDelivery == existing().estimatedDelivery
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status'])
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow delete: if false;
+      }
+    }
+  }
+}

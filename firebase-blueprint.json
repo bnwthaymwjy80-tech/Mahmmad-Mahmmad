@@ -1,0 +1,194 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated customer profile linked to Google Sign-In.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "city": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "email", "createdAt", "updatedAt"]
+    },
+    "UserOrder": {
+      "title": "UserOrder",
+      "description": "Order placed by an authenticated customer.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["preparing", "shipped", "delivered"]
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["cod", "card"]
+        },
+        "subtotalIqd": {
+          "type": "number"
+        },
+        "discountIqd": {
+          "type": "number"
+        },
+        "shippingIqd": {
+          "type": "number"
+        },
+        "totalIqd": {
+          "type": "number"
+        },
+        "customerName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "customerPhone": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "customerCity": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "customerAddress": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "estimatedDelivery": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "itemsSummary": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "status",
+        "paymentMethod",
+        "subtotalIqd",
+        "discountIqd",
+        "shippingIqd",
+        "totalIqd",
+        "customerName",
+        "customerPhone",
+        "customerCity",
+        "customerAddress",
+        "estimatedDelivery",
+        "createdAt"
+      ]
+    },
+    "ProductReview": {
+      "title": "ProductReview",
+      "description": "Public product star rating and comment submitted by a signed-in user.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "productId": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "rating": {
+          "type": "number"
+        },
+        "comment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "verifiedSize": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "productId",
+        "userId",
+        "author",
+        "rating",
+        "comment",
+        "isPublic",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private authenticated customer profile documents."
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/UserOrder" },
+      "description": "Private customer order history under each user profile."
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/ProductReview" },
+      "description": "Public product star ratings and reviews authored by authenticated users."
+    }
+  }
+}

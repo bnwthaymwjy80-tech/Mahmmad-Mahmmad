@@ -1,0 +1,6 @@
+{
+  "name": "أليانز شوب | Alians Shop",
+  "description": "متجر أليانز شوب للتسوق العصري — أزياء، حقائب، إكسسوارات، عناية ومنزل مستوحاة من سفانا وشي إن وعلي إكسبرس.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
